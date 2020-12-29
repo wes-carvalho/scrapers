@@ -1,4 +1,5 @@
 import json
+import regex
 import requests
 import logging
 
@@ -12,7 +13,7 @@ class CRAWLER_WEBMOTORS():
 
     URL_API_CALL = (
         '/api/search/car?url=https://www.webmotors.com.br/'
-        'carros%2Festoque%3F&actualPage={}&displayPerPage=24&'
+        'carros%2Festoque%3F&actualPage={}&displayPerPage=48&'
         'order=1&showMenu=true&showCount=true&showBreadCrumb=true&'
         'testAB=false&returnUrl=false'
     )
@@ -21,6 +22,8 @@ class CRAWLER_WEBMOTORS():
         'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/87.0.4280.66 Safari/537.36}'
     )
+
+    RGX_LEILAO = r'leil..?o'
 
     def __init__(self):
         self.session = requests.Session()
@@ -34,14 +37,22 @@ class CRAWLER_WEBMOTORS():
     def _treat_data(self, response):
         return json.loads(response.text)
 
-    def get_data_from_website(self):
+    def save_root(self, data):
+        with open('data_root.json', 'w+') as f:
+            f.write(json.dumps(data, indent=4, ensure_ascii=False))
+
+    def get_data_from_website(self, save_root=False):
 
         index = 1
         num_total_cars = None
         num_cars_retrieved = 0
 
+        data_root = []
         data_crawled = []
-        key_remove = ['Media', 'PhotoPath', 'ListingType']
+
+        key_remove = ['Media', 'PhotoPath', 'ListingType',
+                      'UniqueId', 'ProductCode', 'Channels', 'HotDeals']
+        nested_key_spec_remove = ['Make', 'Model', 'Version']
 
         logging.info("Extraindo dados de {}... ".format(self.URL_BASE))
 
@@ -58,11 +69,34 @@ class CRAWLER_WEBMOTORS():
 
             data_car = data.get("SearchResults")
 
+            # removing keys
             for car in data_car:
                 for key in key_remove:
                     car.pop(key, None)
 
+                # removing selected nested keys
+                for nested in nested_key_spec_remove:
+                    car.get('Specification', None).get(
+                        nested, None).pop('id', None)
+
+                car.get('Specification', None).get(
+                    'Color', None).pop('IdPrimary', None)
+
+                car.get('Seller', None).pop('Id', None)
+                car.get('Seller', None).pop('AdType', None)
+                car.get('Seller', None).pop('BudgetInvestimento', None)
+
+                # looks for "leilao" term in "LongComment" key
+                if car.get('LongComment'):
+                    if regex.search(self.RGX_LEILAO, car['LongComment'], regex.I):
+                        car['leilao'] = True
+                    else:
+                        car['leilao'] = False
+
                 data_crawled.append(car)
+
+            if save_root:
+                data_root.append(data)
 
             num_cars_retrieved = num_cars_retrieved + len(data_car)
 
@@ -82,7 +116,12 @@ class CRAWLER_WEBMOTORS():
             json_file.write(json.dumps(
                 data_crawled, indent=4, ensure_ascii=False))
 
+        if save_root:
+            with open('./data/data_root.json', 'w') as json_file:
+                json_file.write(json.dumps(
+                    data_root, indent=4, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
-    crawler.get_data_from_website()
+    crawler.get_data_from_website(False)
