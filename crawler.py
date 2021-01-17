@@ -121,9 +121,17 @@ class CRAWLER_WEBMOTORS():
         num_cars_retrieved = 0
         num_cars_retrieved_prev = 0
 
-        data_root = []
         data_crawled = []
 
+        answer = input(
+            "Deseja extrair toda base de dados de {}?\nDigite 'S' para Sim e 'N' para Não\n".format(self.URL_BASE)
+        )
+
+        if answer == 'S' or answer == 's':
+            num_total_cars = 0 # value will be defined latter
+        else:
+            num_total_cars = int(input('Digite o limite de carros: '))
+        
         while num_cars_retrieved <= num_total_cars:
 
             try:
