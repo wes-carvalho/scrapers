@@ -1,0 +1,8 @@
+INFO Extraindo dados de https://www.webmotors.com.br... 
+INFO Número de veículos extraídos: 24.
+INFO Número de veículos extraídos: 48.
+INFO Número de veículos extraídos: 72.
+INFO Número de veículos extraídos: 96.
+INFO Número de veículos extraídos: 120.
+INFO 120 veículos salvos no arquivo car_info.json
+INFO Foram executadas 120 requisições ao servidor. Logs de Warning 0, logs de Erro 0.

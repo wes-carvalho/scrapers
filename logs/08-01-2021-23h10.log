@@ -1,0 +1,8 @@
+INFO 08-01-2021-23:10:13 Extraindo dados de https://www.webmotors.com.br... 
+INFO 08-01-2021-23:10:14 Número de veículos extraídos: 24.
+INFO 08-01-2021-23:10:15 Número de veículos extraídos: 48.
+INFO 08-01-2021-23:10:17 Número de veículos extraídos: 72.
+INFO 08-01-2021-23:10:18 Número de veículos extraídos: 96.
+INFO 08-01-2021-23:10:20 Número de veículos extraídos: 120.
+INFO 08-01-2021-23:10:20 120 veículos salvos no arquivo car_info.json
+INFO 08-01-2021-23:10:20 Foram executadas 120 requisições ao servidor. Logs de Warning 0, logs de Erro 0.
