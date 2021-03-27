@@ -78,12 +78,16 @@ class CRAWLER_WEBMOTORS():
     def _treat_data(self, response):
         return json.loads(response.text)
 
-    def save_root(self, data):
+    def _save_root(self, data):
         with open('data_root.json', 'w+') as f:
             f.write(json.dumps(data, indent=4, ensure_ascii=False))
 
     def _save_json(self, data):
-        with open('./data/car_info.json', 'w') as json_file:
+        worker_name = self.__class__.__name__.split('_')[1]
+        time_stamp = datetime.now().strftime('%d-%m-%Y-%H-%M')
+        file_name = './data/{}-{}.json'.format(worker_name,time_stamp)
+        
+        with open(file_name, 'w') as json_file:
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
 
@@ -221,7 +225,7 @@ class CRAWLER_WEBMOTORS():
                     )
                     self._save_json(data_crawled)
 
-                error_count += 1
+                self.error_count += 1
 
             except Exception:
                 logging.error("Erro no tratamento de dados.")
@@ -236,7 +240,7 @@ class CRAWLER_WEBMOTORS():
                     self._save_json(data_crawled)
                     self._save_root(data)
 
-                error_count += 1
+                self.error_count += 1
 
         logging.info(
             "{} {} veículos salvos no arquivo car_info.json".format(
@@ -245,7 +249,7 @@ class CRAWLER_WEBMOTORS():
 
         logging.info(
             "{} Foram executadas {} requisições ao servidor. Logs de Warning {}, logs de Erro {}.".format(
-                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), num_cars_retrieved,
+                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), index,
                 self.warning_count, self.error_count)
         )
         self._save_json(data_crawled)
