@@ -16,12 +16,6 @@ formatter = logging.Formatter('%(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
-# Fix nata list
-# FIx Code org
-# List of info messages (resume by the end of exec)
-# more changes
-
-
 class CRAWLER_WEBMOTORS():
 
     URL_BASE = "https://www.webmotors.com.br"
@@ -84,8 +78,7 @@ class CRAWLER_WEBMOTORS():
 
     def _save_json(self, data):
         worker_name = self.__class__.__name__.split('_')[1]
-        time_stamp = datetime.now().strftime('%d-%m-%Y-%H-%M')
-        file_name = './data/{}-{}.json'.format(worker_name,time_stamp)
+        file_name = './data/{}-{}.json'.format(worker_name,curr_date)
         
         with open(file_name, 'w') as json_file:
             json_file.write(json.dumps(
@@ -128,7 +121,8 @@ class CRAWLER_WEBMOTORS():
         data_crawled = []
 
         answer = input(
-            "Deseja extrair toda base de dados de {}?\nDigite 'S' para Sim e 'N' para Não\n".format(self.URL_BASE)
+            'Deseja extrair toda base de dados de {}?'
+            '\nDigite "S" para Sim e "N" para Não\n'.format(self.URL_BASE)
         )
 
         if answer == 'S' or answer == 's':
@@ -148,11 +142,18 @@ class CRAWLER_WEBMOTORS():
                 if not num_total_cars:
                     num_total_cars = data.get("Count")
 
-                    logging.info("Número de veículos encontrado na base de {}: {}".format(
-                        self.URL_BASE, num_total_cars))
+                    logging.info(
+                        "Número de veículos encontrado na base de {}: {}".format(
+                            self.URL_BASE, 
+                            num_total_cars
+                        )
+                    )
 
-                    logging.info("{} Iniciando extração de dados... ".format(
-                        datetime.today().strftime("%d-%m-%Y-%H:%M:%S")))
+                    logging.info(
+                        "{} Iniciando extração de dados do sistema.".format(
+                            datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
+                        )
+                    )
 
                 data_car = data.get("SearchResults")
 
@@ -208,43 +209,29 @@ class CRAWLER_WEBMOTORS():
                     num_cars_retrieved_prev = num_cars_retrieved
 
                 logging.info(
-                    "{} Número de veículos extraídos: {}.".format(datetime.today().strftime("%d-%m-%Y-%H:%M:%S"),
-                                                                  num_cars_retrieved)
+                    "{} Número de veículos extraídos: {}.".format(
+                        datetime.today().strftime("%d-%m-%Y-%H:%M:%S"),
+                        num_cars_retrieved
+                    )
                 )
 
                 index = index + 1
 
             except requests.HTTPError:
                 logging.error("Erro na comunicação com o servidor")
-
-                if len(data_crawled):
-                    logging.info(
-                        "O dados tratados até o momento da falha serão salvos.\n Número de carros extraídos: {}".format(len(data_crawled)))
-                    logging.info(
-                        "Índice da página requisitada: {}.".format(index)
-                    )
-                    self._save_json(data_crawled)
-
                 self.error_count += 1
+                continue
 
             except Exception:
-                logging.error("Erro no tratamento de dados.")
-
-                if len(data_crawled):
-                    logging.info(
-                        "O dados brutos e tratados até o momento da falha serão salvos.\n Número de carros extraídos: {}".format(len(data_crawled)))
-
-                    logging.info(
-                        "Índice da página requisitada: {}.".format(index)
-                    )
-                    self._save_json(data_crawled)
-                    self._save_root(data)
-
+                logging.error("Erro no Tratamento de Dados")
                 self.error_count += 1
+                continue
 
         logging.info(
-            "{} {} veículos salvos no arquivo car_info.json".format(
-                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), num_cars_retrieved)
+            "{} {} veículos salvos.".format(
+                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), 
+                num_cars_retrieved
+            )
         )
 
         logging.info(
