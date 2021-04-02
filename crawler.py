@@ -63,14 +63,26 @@ class CRAWLER_WEBMOTORS():
     def __init__(self):
         self.session = requests.Session()
 
-    def _request_page(self, URL_DATA):
-        return self.session.get(
-            self.URL_BASE + URL_DATA,
-            headers={'user-agent': self.user_agent}
+    @property
+    def num_total_cars(self):
+        data = self._acess_data(1)
+        num_total_cars = data.get("Count")
+
+        return num_total_cars
+
+    def _analytics(self,num_cars_retrieved,index):
+        logging.info(
+            "{} {} veículos salvos.".format(
+                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), 
+                num_cars_retrieved
+            )
         )
 
-    def _treat_data(self, response):
-        return json.loads(response.text)
+        logging.info(
+            "{} Foram executadas {} requisições ao servidor. Logs de Warning {}, logs de Erro {}.".format(
+                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), index,
+                self.warning_count, self.error_count)
+        )
 
     def _save_root(self, data):
         with open('data_root.json', 'w+') as f:
@@ -84,7 +96,40 @@ class CRAWLER_WEBMOTORS():
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
 
-    def _build_atr_keys(self, car):
+    def _request_page(self, URL_DATA):
+        return self.session.get(
+            self.URL_BASE + URL_DATA,
+            headers={'user-agent': self.user_agent}
+        )
+
+    def _convert_response_json(self, response):
+        return json.loads(response.text)
+
+    def _acess_data(self, index):
+        ''' Access server and returns response as json'''
+        
+        response = self._request_page(self.URL_API_CALL.format(index))
+        
+        data = self._convert_response_json(response)
+
+        return data
+
+    def _key_removal(self, car):
+        for key in self.key_remove:
+            car.pop(key, None)
+        # removing selected nested keys
+        for nested in self.nested_key_spec_remove:
+            car.get('Specification', None).get(nested, None).pop('id', None)
+
+        car.get('Specification', None).get('Color', None).pop('IdPrimary', None)
+
+        car.get('Seller', None).pop('Id', None)
+        car.get('Seller', None).pop('AdType', None)
+        car.get('Seller', None).pop('BudgetInvestimento', None)
+    
+    def _build_attribute_keys(self, car):
+        ''' Performs key flattening'''
+
         if car.get('Specification').get('VehicleAttributes'):
             for item in car['Specification']['VehicleAttributes']:
                 item_found = False
@@ -110,7 +155,50 @@ class CRAWLER_WEBMOTORS():
                     car['oth_attr'] = [car['oth_attr'], item.get('Name')]
 
         car.get('Specification', None).pop('VehicleAttributes', None)
-        return car
+            
+    def _treat_hotdeal_key(self,car):
+
+        if car.get('HotDeal', None):
+            hot_deal = {}
+            count = 1
+            for item in car.get('HotDeal', None):
+                item.pop('Id', None)
+                hot_deal['Value'+str(count)] = item.pop('Value', None)
+
+                count = count + 1
+            
+    def _look_for_leilao(self,car):
+        ''' Verify if the field LongComment contains the term "leilao" '''
+
+        if car.get('LongComment'):
+            car['LongComment'] = regex.sub(r'\n','',car.get('LongComment'))
+            
+            if regex.search(self.RGX_LEILAO, car['LongComment'], regex.I):
+                car['contains_leilao'] = True
+            else:
+                car['contains_leilao'] = False
+    
+    def _parse_data(self, data):
+        ''' Receives the json response. Returns dict containing relevant info of the cars'''
+        
+        result = []
+
+        self._save_root(data)
+
+        cars = data.get("SearchResults")
+
+        for car in cars:
+            self._key_removal(car)
+
+            self._build_attribute_keys(car)
+
+            self._treat_hotdeal_key(car)
+
+            self._look_for_leilao(car)
+
+            result.append(car)
+        
+        return result
 
     def get_data_from_website(self, save_root=False, index=1):
 
@@ -120,88 +208,30 @@ class CRAWLER_WEBMOTORS():
 
         data_crawled = []
 
+        num_total_cars = self.num_total_cars
+
         answer = input(
+            'Foram encontrados {} carros no servidor.'
             'Deseja extrair toda base de dados de {}?'
-            '\nDigite "S" para Sim e "N" para Não\n'.format(self.URL_BASE)
+            '\nDigite "S" para Sim e "N" para Não\n'.format(num_total_cars,self.URL_BASE)
         )
 
-        if answer == 'S' or answer == 's':
-            num_total_cars = 0 # value will be defined latter
-        else:
+        if answer == 'N' or answer == 'n':
             num_total_cars = int(input('Digite o limite de carros: '))
         
+        logging.info(
+            "{} Iniciando extração de dados do sistema.".format(
+                datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
+            )
+        )
+
         while num_cars_retrieved <= num_total_cars:
-
             try:
-                response = self._request_page(
-                    self.URL_API_CALL.format(index)
-                )
+                data = self._acess_data(index)
 
-                data = self._treat_data(response)
+                data_crawled.extend(self._parse_data(data))
 
-                if not num_total_cars:
-                    num_total_cars = data.get("Count")
-
-                    logging.info(
-                        "Número de veículos encontrado na base de {}: {}".format(
-                            self.URL_BASE, 
-                            num_total_cars
-                        )
-                    )
-
-                    logging.info(
-                        "{} Iniciando extração de dados do sistema.".format(
-                            datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
-                        )
-                    )
-
-                data_car = data.get("SearchResults")
-
-                if save_root:
-                    with open('./data/data_root.json', 'w') as json_file:
-                        json_file.write(json.dumps(
-                            data, indent=4, ensure_ascii=False))
-
-                # removing keys
-                for car in data_car:
-                    for key in self.key_remove:
-                        car.pop(key, None)
-
-                    # removing selected nested keys
-                    for nested in self.nested_key_spec_remove:
-                        car.get('Specification', None).get(
-                            nested, None).pop('id', None)
-
-                    car = self._build_atr_keys(car)
-                    car.get('Specification', None).get(
-                        'Color', None).pop('IdPrimary', None)
-
-                    car.get('Seller', None).pop('Id', None)
-                    car.get('Seller', None).pop('AdType', None)
-                    car.get('Seller', None).pop('BudgetInvestimento', None)
-
-                    # treating HotDeal - key
-                    if car.get('HotDeal', None):
-
-                        hot_deal = {}
-                        count = 1
-                        for item in car.get('HotDeal', None):
-                            item.pop('Id', None)
-                            hot_deal['Value'+str(count)
-                                     ] = item.pop('Value', None)
-
-                            count = count + 1
-
-                    # looks for "leilao" term in "LongComment" key
-                    if car.get('LongComment'):
-                        if regex.search(self.RGX_LEILAO, car['LongComment'], regex.I):
-                            car['contains_leilao'] = True
-                        else:
-                            car['contains_leilao'] = False
-
-                    data_crawled.append(car)
-
-                num_cars_retrieved = num_cars_retrieved + len(data_car)
+                num_cars_retrieved = len(data_crawled)
 
                 if num_cars_retrieved == num_cars_retrieved_prev:
                     break
@@ -227,18 +257,7 @@ class CRAWLER_WEBMOTORS():
                 self.error_count += 1
                 continue
 
-        logging.info(
-            "{} {} veículos salvos.".format(
-                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), 
-                num_cars_retrieved
-            )
-        )
-
-        logging.info(
-            "{} Foram executadas {} requisições ao servidor. Logs de Warning {}, logs de Erro {}.".format(
-                datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), index,
-                self.warning_count, self.error_count)
-        )
+        self._analytics(num_cars_retrieved, index)
         self._save_json(data_crawled)
 
 
