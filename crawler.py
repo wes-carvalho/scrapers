@@ -68,7 +68,7 @@ class CRAWLER_WEBMOTORS():
         data = self._acess_data(1)
         num_total_cars = data.get("Count")
 
-        return num_total_carsSs
+        return num_total_cars
 
     def _analytics(self,num_cars_retrieved,index):
         logging.info(
