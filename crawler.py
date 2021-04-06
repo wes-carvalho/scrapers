@@ -68,7 +68,7 @@ class CRAWLER_WEBMOTORS():
         data = self._acess_data(1)
         num_total_cars = data.get("Count")
 
-        return num_total_cars
+        return num_total_carsSs
 
     def _analytics(self,num_cars_retrieved,index):
         logging.info(
@@ -90,8 +90,12 @@ class CRAWLER_WEBMOTORS():
 
     def _save_json(self, data):
         worker_name = self.__class__.__name__.split('_')[1]
-        file_name = './data/{}-{}.json'.format(worker_name,curr_date)
         
+        if self.flag_test:
+            file_name = './data/parcial/{}-{}.json'.format(worker_name,curr_date)
+        else:
+            file_name = './data/base_completa/{}-{}.json'.format(worker_name,curr_date)
+
         with open(file_name, 'w') as json_file:
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
@@ -206,6 +210,8 @@ class CRAWLER_WEBMOTORS():
         num_cars_retrieved = 0
         num_cars_retrieved_prev = 0
 
+        self.flag_test = False
+
         data_crawled = []
 
         num_total_cars = self.num_total_cars
@@ -217,6 +223,7 @@ class CRAWLER_WEBMOTORS():
         )
 
         if answer == 'N' or answer == 'n':
+            self.flag_test = True
             num_total_cars = int(input('Digite o limite de carros: '))
         
         logging.info(
