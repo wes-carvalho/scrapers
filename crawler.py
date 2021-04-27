@@ -2,7 +2,11 @@ import json
 import regex
 import requests
 import logging
+
 from datetime import datetime
+from analytics import ANALYTICS
+from unicodedata import normalize
+
 
 curr_date = datetime.today().strftime("%d-%m-%Y-%Hh%M")
 
@@ -32,6 +36,8 @@ class CRAWLER_WEBMOTORS():
         'Chrome/87.0.4280.66 Safari/537.36}'
     )
 
+    RGX_SINGLE_WORDS = r'[A-Z][^A-Z]*'
+
     RGX_LEILAO = r'leil..?o'
 
     RGX_ATTR = [
@@ -59,6 +65,9 @@ class CRAWLER_WEBMOTORS():
 
     error_count = 0
     warning_count = 0
+
+    file_path = None
+    send_email = None
 
     def __init__(self):
         self.session = requests.Session()
@@ -96,6 +105,8 @@ class CRAWLER_WEBMOTORS():
         else:
             file_name = './data/base_completa/{}-{}.json'.format(worker_name,curr_date)
 
+        self.file_path = file_name
+
         with open(file_name, 'w') as json_file:
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
@@ -130,9 +141,13 @@ class CRAWLER_WEBMOTORS():
         car.get('Seller', None).pop('Id', None)
         car.get('Seller', None).pop('AdType', None)
         car.get('Seller', None).pop('BudgetInvestimento', None)
+        
+        car.get('Prices').pop('SearchPrice')
+        car['Price'] = car.get('Prices').get('Price')
+        car.pop('Prices')
     
     def _build_attribute_keys(self, car):
-        ''' Performs key flattening'''
+        '''Performs key flattening'''
 
         if car.get('Specification').get('VehicleAttributes'):
             for item in car['Specification']['VehicleAttributes']:
@@ -162,14 +177,16 @@ class CRAWLER_WEBMOTORS():
             
     def _treat_hotdeal_key(self,car):
 
-        if car.get('HotDeal', None):
+        if car.get('HotDeal'):
             hot_deal = {}
             count = 1
-            for item in car.get('HotDeal', None):
+            for item in car.get('HotDeal'):
                 item.pop('Id', None)
                 hot_deal['Value'+str(count)] = item.pop('Value', None)
 
                 count = count + 1
+        
+            car['HotDeal'] = hot_deal
             
     def _look_for_leilao(self,car):
         ''' Verify if the field LongComment contains the term "leilao" '''
@@ -181,7 +198,111 @@ class CRAWLER_WEBMOTORS():
                 car['contains_leilao'] = True
             else:
                 car['contains_leilao'] = False
+
+    def remove_acento(self,text):
+        return normalize('NFKD', text).encode('ASCII','ignore').decode('ASCII')
     
+    def _get_info_from_version(self,car):
+        ''' Extract info of combustivel, motor, cilindrada, tração, valvulas and cilindros_disposicao from the version text'''
+        
+        rgx_combustivel =(
+             r'(?P<combustivel>gasolina|..?lcool|diesel|flex|h..?brido|hybrid|gas|el..?trico|tetrafuel|recharge)'
+        )
+        
+        rgx_motor = r'\s(?P<motor>supercharged|\p{L}*turbo\p{L}*|tsi|ingenium|\p{L}*flex\p{L}*)\s'
+
+        versao = car.get('Specification').get('Title')
+
+        # Extract combustível
+        m = regex.search(rgx_combustivel, versao, regex.I)
+        if m:
+            car['combustivel'] = self.remove_acento(m.groupdict().get('combustivel').strip())
+
+            if regex.search(r'recharge', car.get('combustivel'), regex.I):
+                car['combustivel'] = 'ELETRICO'    
+        else:   
+            car['combustivel'] = 'OUTROS'
+        
+        # Extract motor
+        m = regex.search(rgx_motor, versao, regex.I)
+        if m:
+            car['motor'] = self.remove_acento(m.groupdict().get('motor').strip())  
+            
+            if regex.search(r'flex.+|.+flex',car.get('motor'), regex.I) and not car.get('combustivel'): 
+                car['combustivel'] = 'FLEX'
+        else:    
+            car['motor'] = 'OUTROS'
+
+        # Extract Cilindrada        
+        rgx_cilindrada = r'\d\.\d'
+
+        m = regex.search(rgx_cilindrada, versao)
+        if m:
+            car['cilindrada'] = m.group()
+        
+        # Extract Cilindrada        
+        rgx_tracao = r'\dx\d|\p{L}\dWD'
+        m = regex.search(rgx_tracao, versao, regex.I)
+        car['tracao'] = m.group() if m else None
+
+        # Extract Válvulas        
+        rgx_valvulas = r'\d{1,2}V'
+        m = regex.search(rgx_valvulas, versao, regex.I)
+        car['valvulas'] = m.group() if m else None
+            
+        # cilindros cylinders        
+        rgx_cilindros_disp = r'V\d{1,2}'
+        m = regex.search(rgx_cilindros_disp, versao, regex.I)
+        car['cilindros_disp'] = m.group() if m else None
+
+    def _set_inner_key_pattern(self, inner_dict):
+        ''' Receives a inner_car dictionary. Returns a new_dict containing the correct keys' names'''
+
+        new_dict = {}
+
+        for key in inner_dict:
+            value = inner_dict.get(key)
+            key_name = key 
+
+            match = regex.findall(self.RGX_SINGLE_WORDS,key)
+
+            if isinstance(inner_dict.get(key),dict):                 
+                value = {}
+                value = self._set_inner_key_pattern(inner_dict.get(key))
+                key_name = key.lower()
+            else:        
+                if len(match)>0:
+                    key_name = '_'.join(match).lower()
+                        
+            new_dict[key_name] = value
+        
+        return new_dict
+
+    def _set_key_pattern(self,car):
+        ''' Receives car dictionary. Returns a new_dict containing the correct keys' names'''
+
+        new_dict = {}
+        
+        for key in car:
+            key_name = key
+            value = car.get(key)
+
+            # match words with uppercase letter (forming a list)
+            matches = regex.findall(self.RGX_SINGLE_WORDS,key)
+            
+            if len(matches)>0:
+                key_name = '_'.join(matches).lower() # create the correct name
+                                
+                if isinstance(car.get(key),dict):
+                    # in the case the key is a dict, performs the same transf. on the inner keys
+                    value = self._set_inner_key_pattern(car.get(key))
+                else:
+                    value = car.get(key)
+
+            new_dict[key_name] = value
+
+        return new_dict
+
     def _parse_data(self, data):
         ''' Receives the json response. Returns dict containing relevant info of the cars'''
         
@@ -190,7 +311,7 @@ class CRAWLER_WEBMOTORS():
         self._save_root(data)
 
         cars = data.get("SearchResults")
-
+        
         for car in cars:
             self._key_removal(car)
 
@@ -198,9 +319,13 @@ class CRAWLER_WEBMOTORS():
 
             self._treat_hotdeal_key(car)
 
-            self._look_for_leilao(car)
+            self._get_info_from_version(car)
 
-            result.append(car)
+            car_info = self._set_key_pattern(car)
+
+            self._look_for_leilao(car_info)
+
+            result.append(car_info)
         
         return result
 
@@ -224,8 +349,15 @@ class CRAWLER_WEBMOTORS():
 
         if answer == 'N' or answer == 'n':
             self.flag_test = True
+            self.send_email = False
             num_total_cars = int(input('Digite o limite de carros: '))
-        
+        else:
+            email_msg = input(
+            'Deseja enviar e-mail o report gerado por e-mail?'
+            '\nDigite "S" para Sim e "N" para Não\n'
+            )
+            self.send_email = True if email_msg in ['S','s'] else False
+
         logging.info(
             "{} Iniciando extração de dados do sistema.".format(
                 datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
@@ -258,16 +390,27 @@ class CRAWLER_WEBMOTORS():
                 logging.error("Erro na comunicação com o servidor")
                 self.error_count += 1
                 continue
-
-            except Exception:
-                logging.error("Erro no Tratamento de Dados")
-                self.error_count += 1
+            except AttributeError:
+                logging.error(f"Resposta inesperada. Replicando requisição {index}.")
+                index = index - 1
                 continue
-
+            except Exception:
+                logging.error("Erro não identificado na extração de dados")
+                raise Exception
+                
         self._analytics(num_cars_retrieved, index)
         self._save_json(data_crawled)
+
+        return data_crawled, self.file_path
 
 
 if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
-    crawler.get_data_from_website(True)
+    json_list, file_path = crawler.get_data_from_website(True)
+    
+    wk = ANALYTICS()
+    report_path = wk.descriptive_statistics(json_list, file_path)
+
+    if crawler.send_email == True:
+        wk.send_email(report_path)
+
