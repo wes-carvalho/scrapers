@@ -1,7 +1,9 @@
+import os
 import json
 import regex
-import requests
+import getpass
 import logging
+import requests
 
 from datetime import datetime
 from analytics import ANALYTICS
@@ -10,15 +12,10 @@ from unicodedata import normalize
 
 curr_date = datetime.today().strftime("%d-%m-%Y-%Hh%M")
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(levelname)-4s %(message)s',
-                    filename='./logs/{}.log'.format(curr_date))
-
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-formatter = logging.Formatter('%(message)s')
-console.setFormatter(formatter)
-logging.getLogger('').addHandler(console)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)-4s %(message)s'
+)
 
 class CRAWLER_WEBMOTORS():
 
@@ -68,10 +65,36 @@ class CRAWLER_WEBMOTORS():
 
     file_path = None
     send_email = None
-
+    
+    saving_path = None
+    
     def __init__(self):
         self.session = requests.Session()
+    
+    def _get_save_path(self):            
+        user = getpass.getuser()
+        root = f'{os.getcwd().split(user)[0]}{user}'
 
+        documents_path = ['Documentos','Documents']
+
+        for doc in documents_path:
+            path = f'{root}/{doc}'
+
+            if os.path.exists(path):
+                if not os.path.exists(f'{path}/Scraper/relatorios'):
+                    os.mkdir(f'{path}/Scraper')
+                    os.mkdir(f'{path}/Scraper/relatorios')
+                    os.mkdir(f'{path}/Scraper/relatorios/resumo_base')
+
+                if not os.path.exists(f'{path}/Scraper/dados'):
+                    os.mkdir(f'{path}/Scraper/dados')
+                    os.mkdir(f'{path}/Scraper/dados/base_completa')
+                    os.mkdir(f'{path}/Scraper/dados/teste')
+                
+                self.saving_path = f'{path}/Scraper'
+                
+        logging.info(f"\n***INFORMAÇÕES SERÃO SALVAS EM {path}/Scraper***\n")
+    
     @property
     def num_total_cars(self):
         data = self._acess_data(1)
@@ -101,9 +124,9 @@ class CRAWLER_WEBMOTORS():
         worker_name = self.__class__.__name__.split('_')[1]
         
         if self.flag_test:
-            file_name = './data/parcial/{}-{}.json'.format(worker_name,curr_date)
+            file_name = f'{self.saving_path}/dados/teste/{worker_name}-{curr_date}.json'
         else:
-            file_name = './data/base_completa/{}-{}.json'.format(worker_name,curr_date)
+            file_name = f'{self.saving_path}/dados/base_completa/{worker_name}-{curr_date}.json'
 
         self.file_path = file_name
 
@@ -357,6 +380,8 @@ class CRAWLER_WEBMOTORS():
             '\nDigite "S" para Sim e "N" para Não\n'
             )
             self.send_email = True if email_msg in ['S','s'] else False
+
+        self._get_save_path()
 
         logging.info(
             "{} Iniciando extração de dados do sistema.".format(

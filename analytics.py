@@ -25,6 +25,11 @@ class ANALYTICS():
         'vitoredo1097@gmail.com'
     ]
 
+    saving_path = None
+
+    def get_save_path(self, file_path):
+        return f'{file_path.split("dados")[0]}/relatorios/resumo_base'
+
     def _build_df_from_file(self, json_list):
 
         logging.info(
@@ -75,7 +80,7 @@ class ANALYTICS():
             'aceita_troca', 'financiado', 'licenciado', 'contains_leilao',
             'vendedor_tipo', 'vendedor_cidade', 'vendedor_estado', 'score_vendedor',
             'car_delivery', 'troca_troco', 'comentario', 'combustivel','motor',
-            'cilindrada', 'tracao','valvulas'
+            'cilindrada', 'tracao','valvulas','cilindros_disposicao'
         ]
 
         # pra garantir que tem apenas as colunas que existem (que nao foram dropadas antes)
@@ -164,9 +169,11 @@ class ANALYTICS():
         # export
         data_hora = file_path.split("/")[-1].split("WEBMOTORS-")[-1].split(".json")[0]
 
-        df_export_view.to_excel("./relatorios/report_{}.xlsx".format(data_hora), index=False)
+        save_path = self.get_save_path(file_path)
 
-        return f"./relatorios/report_{data_hora}.xlsx"
+        df_export_view.to_excel(f"{save_path}/report_{data_hora}.xlsx", index=False)
+
+        return f"{save_path}/report_{data_hora}.xlsx"
 
     def send_email(self, report_path):
         
