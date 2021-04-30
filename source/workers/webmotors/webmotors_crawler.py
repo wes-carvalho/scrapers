@@ -17,6 +17,7 @@ logging.basicConfig(
     format='%(levelname)-4s %(message)s'
 )
 
+
 class CRAWLER_WEBMOTORS():
 
     URL_BASE = "https://www.webmotors.com.br"
@@ -438,7 +439,7 @@ class CRAWLER_WEBMOTORS():
 
 if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
-    json_list, file_path = crawler.get_data_from_website(True)
+    json_list, file_path = crawler.get_data_from_website(False)
     
     wk = ANALYTICS()
     report_path = wk.descriptive_statistics(json_list, file_path)
