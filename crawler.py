@@ -92,7 +92,14 @@ class CRAWLER_WEBMOTORS():
                     os.mkdir(f'{path}/Scraper/dados/teste')
                 
                 self.saving_path = f'{path}/Scraper'
-                
+        
+        if not self.saving_path:
+            logging.error(
+                f'Não foi possível encontrar o caminho {path}/Scraper.'
+            )
+            exit()
+
+
         logging.info(f"\n***INFORMAÇÕES SERÃO SALVAS EM {path}/Scraper***\n")
     
     @property
