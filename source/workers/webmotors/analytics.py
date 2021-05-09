@@ -97,9 +97,29 @@ class ANALYTICS():
 
         return df
 
+    def _fix_column_names(self, df_export_view):
+        human_readable_columns = [
+            'Marca','Modelo','Ano Modelo','Transmissão','Categoria','Blindado','Nº Portas','Cilindrada', 'Combustível', 'Estado',
+            'Km Médio', 'Km Mínimo', 'Km Máximo', 'Km Mediana', 'Km Desvio Padrão', 'Nº de Carros Encontrados',
+            'Média dos Preços', 'Preço Mínimo', 'Preço Máximo','Mediana dos Preços', 'Desvio Padrão dos Preços', '(%) Tabela FIPE Médio',
+            '(%) Tabela FIPE Mínino', '(%) Tabela FIPE Máximo', '(%) Tabela FIPE Mediana','(%) Tabela FIPE Desvio Padrão' 
+        ]
+
+        df_export_view.columns = human_readable_columns
+
+        columns_swap = [
+            'Marca','Modelo','Ano Modelo','Transmissão','Categoria','Blindado','Nº Portas','Cilindrada', 'Combustível','Estado',
+            'Nº de Carros Encontrados','Km Médio', 'Km Mínimo', 'Km Máximo', 'Km Mediana', 'Km Desvio Padrão', 
+            'Média dos Preços', 'Preço Mínimo', 'Preço Máximo','Mediana dos Preços', 'Desvio Padrão dos Preços', '(%) Tabela FIPE Médio',
+            '(%) Tabela FIPE Mínino', '(%) Tabela FIPE Máximo', '(%) Tabela FIPE Mediana','(%) Tabela FIPE Desvio Padrão' 
+        ]
+        
+        df_export_view = df_export_view[columns_swap]
+
+        return df_export_view
     
     def descriptive_statistics(self, json_list, file_path):
-
+        
         logging.info(
             "{} Iniciando análise descrtiva da base.".format(
                 datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
@@ -118,7 +138,7 @@ class ANALYTICS():
                     for marca in marcas}
         
         # características que definem um carro ("RG do carro")
-        rg = "marca, modelo, ano_modelo, transmissao, categoria, blindado, num_portas, cilindrada, combustivel".split(", ")
+        rg = "marca, modelo, ano_modelo, transmissao, categoria, blindado, num_portas, cilindrada, combustivel, vendedor_estado".split(", ")
 
         marca_modelo_ano = {marca : 
             {modelo: df_marcas[marca][df_marcas[marca]["modelo"] == modelo].groupby(rg)[
@@ -171,7 +191,11 @@ class ANALYTICS():
 
         save_path = self.get_save_path(file_path)
 
-        df_export_view.to_excel(f"{save_path}/report_{data_hora}.xlsx", index=False)
+        df_export_view.drop(['km_count','fipe_perc_count'], axis = 1, inplace = True)
+        
+        df_final = self._fix_column_names(df_export_view)
+
+        df_final.to_excel(f"{save_path}/report_{data_hora}.xlsx", index=False)
 
         return f"{save_path}/report_{data_hora}.xlsx"
 
