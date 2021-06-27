@@ -7,14 +7,18 @@ import requests
 
 from datetime import datetime
 from analytics import ANALYTICS
-from unicodedata import normalize
 
+from database.save_db import DATABASE
+
+from unicodedata import normalize
 
 curr_date = datetime.today().strftime("%d-%m-%Y-%Hh%M")
 
+market_place = 'webmotors'
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(levelname)-4s %(message)s'
+    format='%(message)s'
 )
 
 
@@ -66,6 +70,7 @@ class CRAWLER_WEBMOTORS():
 
     file_path = None
     send_email = None
+    save_db = False
     
     saving_path = None
     
@@ -86,6 +91,7 @@ class CRAWLER_WEBMOTORS():
                     os.mkdir(f'{path}/Scraper')
                     os.mkdir(f'{path}/Scraper/relatorios')
                     os.mkdir(f'{path}/Scraper/relatorios/resumo_base')
+                    os.mkdir(f'{path}/Scraper/relatorios/relatorio_carros')
 
                 if not os.path.exists(f'{path}/Scraper/dados'):
                     os.mkdir(f'{path}/Scraper/dados')
@@ -124,6 +130,47 @@ class CRAWLER_WEBMOTORS():
                 self.warning_count, self.error_count)
         )
 
+    def _clean_json(self,data):
+        '''Remove duplicates'''
+        
+        # JSON keys to tuples
+        for item in data:
+            for key in item:
+                if type(item.get(key)) == dict:
+                    for sub_key in item.get(key): 
+                        if type(item.get(key).get(sub_key)) == dict:
+                            item[key][sub_key] = tuple(item.get(key).get(sub_key).items())
+            
+                    item[key] = tuple(item.get(key).items())
+
+        # convert list of tuples to set (removing duplicates)
+        data_cleaned = [dict(t) for t in {tuple(d.items()) for d in data}]
+
+        # from list of tuples back to json
+        final_data = []
+
+        for item in data_cleaned:
+            item_converted = {}
+
+            for key in item:
+                if type(item.get(key)) == tuple:
+                    key_converted = {}
+                    for sub_key in item.get(key):
+                        if type(sub_key[1]) == tuple:
+                            sub_key_converted = {sub_key[1][0][0]:sub_key[1][0][1]}
+                        else:
+                            sub_key_converted = sub_key[1]
+               
+                        key_converted[sub_key[0]] = sub_key_converted
+
+                    item_converted[key] = key_converted
+                else:
+                    item_converted[key] = item.get(key)
+
+            final_data.append(item_converted)
+        
+        return final_data
+        
     def _save_root(self, data):
         with open('data_root.json', 'w+') as f:
             f.write(json.dumps(data, indent=4, ensure_ascii=False))
@@ -220,15 +267,16 @@ class CRAWLER_WEBMOTORS():
             car['HotDeal'] = hot_deal
             
     def _look_for_leilao(self,car):
-        ''' Verify if the field LongComment contains the term "leilao" '''
+        ''' Verify if the field long_comment contains the term "leilao" '''
 
-        if car.get('LongComment'):
-            car['LongComment'] = regex.sub(r'\n','',car.get('LongComment'))
+        if car.get('long_comment'):
+            car['long_comment'] = regex.sub(r'\n','',car.get('long_comment'))
             
-            if regex.search(self.RGX_LEILAO, car['LongComment'], regex.I):
+            if regex.search(self.RGX_LEILAO, car['long_comment'], regex.I):
                 car['contains_leilao'] = True
             else:
                 car['contains_leilao'] = False
+
 
     def remove_acento(self,text):
         return normalize('NFKD', text).encode('ASCII','ignore').decode('ASCII')
@@ -339,8 +387,6 @@ class CRAWLER_WEBMOTORS():
         
         result = []
 
-        self._save_root(data)
-
         cars = data.get("SearchResults")
         
         for car in cars:
@@ -353,7 +399,9 @@ class CRAWLER_WEBMOTORS():
             self._get_info_from_version(car)
 
             car_info = self._set_key_pattern(car)
-
+            
+            # strip dict
+            
             self._look_for_leilao(car_info)
 
             result.append(car_info)
@@ -373,7 +421,7 @@ class CRAWLER_WEBMOTORS():
         num_total_cars = self.num_total_cars
 
         answer = input(
-            'Foram encontrados {} carros no servidor.'
+            '\nForam encontrados {} carros no servidor.'
             'Deseja extrair toda base de dados de {}?'
             '\nDigite "S" para Sim e "N" para Não\n'.format(num_total_cars,self.URL_BASE)
         )
@@ -381,13 +429,20 @@ class CRAWLER_WEBMOTORS():
         if answer == 'N' or answer == 'n':
             self.flag_test = True
             self.send_email = False
-            num_total_cars = int(input('Digite o limite de carros: '))
+            num_total_cars = int(input('\nDigite o limite de carros: '))
         else:
             email_msg = input(
-            'Deseja enviar e-mail o report gerado por e-mail?'
+            '\nDeseja enviar e-mail o report gerado por e-mail?'
             '\nDigite "S" para Sim e "N" para Não\n'
             )
             self.send_email = True if email_msg in ['S','s'] else False
+
+        answer = input(
+            '\nDeseja salvar as informações no Banco de Dados?'
+            '\nDigite "S" para Sim e "N" para Não\n'
+        )
+
+        self.save_db = True if answer.lower() == 's' else False
 
         self._get_save_path()
 
@@ -416,34 +471,51 @@ class CRAWLER_WEBMOTORS():
                         num_cars_retrieved
                     )
                 )
-
                 index = index + 1
 
             except requests.HTTPError:
                 logging.error("Erro na comunicação com o servidor")
                 self.error_count += 1
                 continue
-            except AttributeError:
+            except TypeError:
+                logging.error(f"Resposta inesperada. Replicando requisição {index}.")
+                index = index - 1
+                continue
+            except TypeError:
                 logging.error(f"Resposta inesperada. Replicando requisição {index}.")
                 index = index - 1
                 continue
             except Exception:
                 logging.error("Erro não identificado na extração de dados")
                 raise Exception
-                
-        self._analytics(num_cars_retrieved, index)
-        self._save_json(data_crawled)
 
-        return data_crawled, self.file_path
+        self._analytics(num_cars_retrieved, index)
+
+        data = self._clean_json(data_crawled)
+        self._save_json(data)
+
+        return data, self.file_path
 
 
 if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
     json_list, file_path = crawler.get_data_from_website(False)
     
-    wk = ANALYTICS()
-    report_path = wk.descriptive_statistics(json_list, file_path)
+    #wk = ANALYTICS()
+    #resumo_path, carros_path = wk.generate_report(json_list, file_path)
 
-    if crawler.send_email == True:
-        wk.send_email(report_path)
+    #files = [resumo_path, carros_path]
+
+    #if crawler.send_email == True:
+    #    wk.send_email(files)
+
+    if crawler.save_db == True:
+
+        logging.info(f"\nSalvando Informações no Banco\n")
+
+        database = DATABASE()
+        database.save(json_list, market_place)
+
+        logging.info(f"\nDados salvos!\n")
+
 
