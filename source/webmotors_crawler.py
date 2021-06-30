@@ -5,12 +5,12 @@ import getpass
 import logging
 import requests
 
+from unicodedata import normalize
 from datetime import datetime
-from analytics import ANALYTICS
 
+from analytics import ANALYTICS
 from database.save_db import DATABASE
 
-from unicodedata import normalize
 
 curr_date = datetime.today().strftime("%d-%m-%Y-%Hh%M")
 
@@ -501,21 +501,21 @@ if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
     json_list, file_path = crawler.get_data_from_website(False)
     
-    #wk = ANALYTICS()
-    #resumo_path, carros_path = wk.generate_report(json_list, file_path)
+    wk = ANALYTICS()
+    resumo_path = wk.descriptive_statistics(json_list, file_path)
 
-    #files = [resumo_path, carros_path]
+    files = resumo_path
 
-    #if crawler.send_email == True:
-    #    wk.send_email(files)
+    if crawler.send_email == True:
+       wk.send_email(files)
 
     if crawler.save_db == True:
 
         logging.info(f"\nSalvando Informações no Banco\n")
 
         database = DATABASE()
-        database.save(json_list, market_place)
+        n_cars = database.save(json_list, market_place)
 
-        logging.info(f"\nDados salvos!\n")
+        logging.info(f"\n{n_cars} salvos no banco de dados!\n")
 
 

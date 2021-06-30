@@ -2,7 +2,7 @@ import json
 import regex
 import hashlib
 
-from .base import CAR, DATA
+from database.base import CAR, DATA
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +13,8 @@ curr_time = datetime.today().replace(microsecond=0)
 
 class DATABASE():
 
-    index = 0
+    index = 1000
+    n_cars = 0
 
     # db connection string
     db_url = 'mysql+pymysql://wesley:Localdb@2602#@localhost:3306/scraper'
@@ -168,7 +169,13 @@ class DATABASE():
         self.session.add(data)
         self.session.commit()
 
-        self.index += 1 
+        self.n_cars += 1 
+
+        # prints only each every 1000 cars
+        if self.n_cars == self.index:
+            print(f'Número de carros salvos {self.n_cars}')
+            self.index += 1000
+
 
     def save_car(self,data): 
         ''' Saves car data in CAR table in database '''
@@ -222,3 +229,5 @@ class DATABASE():
         self.marketplace = marketplace
 
         self.save_car(data)
+
+        return self.n_cars
