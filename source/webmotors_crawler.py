@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import regex
 import getpass
 import logging
@@ -28,7 +29,7 @@ class CRAWLER_WEBMOTORS():
 
     URL_API_CALL = (
         '/api/search/car?url=https://www.webmotors.com.br/'
-        'carros%2Festoque%3F&actualPage={}&displayPerPage=48&'
+        'carros%2Festoque%3F&actualPage={}&displayPerPage=28&'
         'order=1&showMenu=true&showCount=true&showBreadCrumb=true&'
         'testAB=false&returnUrl=false'
     )
@@ -67,6 +68,8 @@ class CRAWLER_WEBMOTORS():
 
     error_count = 0
     warning_count = 0
+
+    n_cars_requested = 3800
 
     file_path = None
     send_email = None
@@ -192,7 +195,8 @@ class CRAWLER_WEBMOTORS():
     def _request_page(self, URL_DATA):
         return self.session.get(
             self.URL_BASE + URL_DATA,
-            headers={'user-agent': self.user_agent}
+            headers={'user-agent': self.user_agent},
+            timeout = 10
         )
 
     def _convert_response_json(self, response):
@@ -454,6 +458,13 @@ class CRAWLER_WEBMOTORS():
 
         while num_cars_retrieved <= num_total_cars:
             try:
+
+                if num_cars_retrieved > self.n_cars_requested:
+                    print('Waiting...')
+                    time.sleep(300)
+                    self.n_cars_requested += 3800
+                    print('Ready!')
+
                 data = self._acess_data(index)
 
                 data_crawled.extend(self._parse_data(data))
@@ -473,18 +484,14 @@ class CRAWLER_WEBMOTORS():
                 )
                 index = index + 1
 
-            except requests.HTTPError:
-                logging.error("Erro na comunicação com o servidor")
-                self.error_count += 1
-                continue
-            except TypeError:
+            except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError,requests.exceptions.ReadTimeout) as e:
                 logging.error(f"Resposta inesperada. Replicando requisição {index}.")
                 index = index - 1
                 continue
-            except TypeError:
-                logging.error(f"Resposta inesperada. Replicando requisição {index}.")
+            except json.decoder.JSONDecodeError:
+                logging.error(f"Bloqueado pelo servidor. Replicando requisição {index} após sleep.time.")
+                time.sleep(300)
                 index = index - 1
-                continue
             except Exception:
                 logging.error("Erro não identificado na extração de dados")
                 raise Exception
