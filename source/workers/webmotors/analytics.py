@@ -127,38 +127,47 @@ class ANALYTICS():
         )
 
         df = self._build_df_from_file(json_list)
+        
+        ##################################################
+        
 
         marcas = df["marca"].unique().tolist()
 
         df_marcas = {marca: df[df["marca"] == marca] for marca in marcas}
 
-        modelos_describe = {marca : 
-            {modelo: df_marcas[marca].loc[df_marcas[marca]["modelo"] == modelo].describe() 
-                            for modelo in df_marcas[marca]["modelo"].unique().tolist()}
-                    for marca in marcas}
+        # não tá sendo usado...
+        
+#         modelos_describe = {marca : 
+#             {modelo: df_marcas[marca].loc[df_marcas[marca]["modelo"] == modelo].describe() 
+#                             for modelo in df_marcas[marca]["modelo"].unique().tolist()}
+#                     for marca in marcas}
+
         
         # características que definem um carro ("RG do carro")
         rg = "marca, modelo, ano_modelo, transmissao, categoria, blindado, num_portas, cilindrada, combustivel, vendedor_estado".split(", ")
 
-        marca_modelo_ano = {marca : 
+        marca_modelo_rg = {marca : 
             {modelo: df_marcas[marca][df_marcas[marca]["modelo"] == modelo].groupby(rg)[
                 ["km", "preco", "fipe_perc"]].agg(["count", "mean","min","max",np.median,np.std]) for modelo in df_marcas[marca]["modelo"].unique().tolist()}
                     for marca in marcas}
 
+        ##################################################
 
         df_export = pd.DataFrame()
 
-        for marca in marca_modelo_ano.keys():
+        for marca in marca_modelo_rg.keys():
     
-            for modelo in marca_modelo_ano[marca].keys():
+            for modelo in marca_modelo_rg[marca].keys():
         
-                df_export = pd.concat([df_export, marca_modelo_ano[marca][modelo]])
+                df_export = pd.concat([df_export, marca_modelo_rg[marca][modelo]])
+            
+        ##################################################
 
         df_export_view = df_export.copy()
 
         df_export_view = df_export_view.fillna("-")
 
-        # formatando dadosf
+        # formatando dados
         for col in df_export_view.columns:
     
             if col[0] == "preco":
@@ -185,7 +194,9 @@ class ANALYTICS():
         
         # ordenando
         df_export_view = df_export_view.sort_values(["marca", "modelo", "preco_count"])
-
+        
+        ##################################################
+        
         # export
         data_hora = file_path.split("/")[-1].split("WEBMOTORS-")[-1].split(".json")[0]
 
