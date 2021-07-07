@@ -119,7 +119,7 @@ class CRAWLER_WEBMOTORS():
 
         return num_total_cars
 
-    def _analytics(self,num_cars_retrieved,index):
+    def _infos_extracted(self,num_cars_retrieved,index):
         logging.info(
             "{} {} veículos salvos.".format(
                 datetime.today().strftime("%d-%m-%Y-%H:%M:%S"), 
@@ -136,6 +136,10 @@ class CRAWLER_WEBMOTORS():
     def _clean_json(self,data):
         '''Remove duplicates'''
         
+        logging.info(
+            "\nRemovendo entradas duplicadas."
+        )
+
         # JSON keys to tuples
         for item in data:
             for key in item:
@@ -172,6 +176,10 @@ class CRAWLER_WEBMOTORS():
 
             final_data.append(item_converted)
         
+        logging.info(
+            "\nLimpeza de JSON concluída."
+        )
+        
         return final_data
         
     def _save_root(self, data):
@@ -179,6 +187,11 @@ class CRAWLER_WEBMOTORS():
             f.write(json.dumps(data, indent=4, ensure_ascii=False))
 
     def _save_json(self, data):
+
+        logging.info(
+            "\nSalvando JSON localmente."
+        )
+
         worker_name = self.__class__.__name__.split('_')[1]
         
         if self.flag_test:
@@ -191,6 +204,10 @@ class CRAWLER_WEBMOTORS():
         with open(file_name, 'w') as json_file:
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
+
+        logging.info(
+            "JSON salvo localmente."
+        )
 
     def _request_page(self, URL_DATA):
         return self.session.get(
@@ -496,7 +513,7 @@ class CRAWLER_WEBMOTORS():
                 logging.error("Erro não identificado na extração de dados")
                 raise Exception
 
-        self._analytics(num_cars_retrieved, index)
+        self._infos_extracted(num_cars_retrieved, index)
 
         data = self._clean_json(data_crawled)
         self._save_json(data)
