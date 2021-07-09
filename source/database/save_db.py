@@ -56,7 +56,7 @@ class DATABASE():
         'city' : ['seller','city'],
         'state' : ['seller','state'],
         'hot_deal': ['hot_deal','value'],
-        'title': ['specification','title'],
+        'ad_title': ['specification','title'],
         'armored': ['specification','armored'],
         'seller_type' : ['seller','seller_type'],
         'ports': ['specification','number_ports'],
@@ -134,6 +134,7 @@ class DATABASE():
         data = DATA(
             car_hash = car_hash,
             date = curr_time,
+            ad_title = car_adv.get('specification').get('title'),
             price = car_adv.get('price'),
             fipe_percent = float(car_adv.get('fipe_percent')) if car_adv.get('fipe_percent') else None,
             odometer = int(car_adv.get('specification').get('odometer')),
@@ -194,7 +195,6 @@ class DATABASE():
             is_armored = 1 if regex.search(r's',item.get('specification').get('armored'),regex.I) else 0
 
             car = CAR(
-                title = item.get('specification').get('title'),
                 brand = item.get('specification').get('make').get('value'),
                 model = item.get('specification').get('model').get('value'),
                 version = item.get('specification').get('version').get('value'),

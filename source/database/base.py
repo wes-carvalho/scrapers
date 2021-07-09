@@ -13,7 +13,6 @@ class CAR(Base):
     car_hash = Column(String, primary_key=True)    
     
     fuel = Column(String)
-    title = Column(String)
     brand = Column(String)
     model = Column(String)
     motor = Column(String)
@@ -37,8 +36,10 @@ class DATA(Base):
 
     id = Column(Integer, primary_key=True)    
     car_hash = Column(String, ForeignKey('car.car_hash'))    
-    
+
     date = Column(Date)
+
+    ad_title = Column(String)
 
     price = Column(Float)
     fipe_percent = Column(Float)
