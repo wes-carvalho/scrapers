@@ -1,3 +1,4 @@
+from io import StringIO
 import os
 import json
 import time
@@ -177,7 +178,7 @@ class CRAWLER_WEBMOTORS():
             final_data.append(item_converted)
         
         logging.info(
-            "\nLimpeza de JSON concluída."
+            "Limpeza de JSON concluída."
         )
         
         return final_data
@@ -206,7 +207,7 @@ class CRAWLER_WEBMOTORS():
                 data, indent=4, ensure_ascii=False))
 
         logging.info(
-            "JSON salvo localmente."
+            "JSON salvo localmente.\n"
         )
 
     def _request_page(self, URL_DATA):
@@ -299,7 +300,7 @@ class CRAWLER_WEBMOTORS():
                 car['contains_leilao'] = False
 
 
-    def remove_acento(self,text):
+    def _remove_acento(self,text):
         return normalize('NFKD', text).encode('ASCII','ignore').decode('ASCII')
     
     def _get_info_from_version(self,car):
@@ -316,7 +317,7 @@ class CRAWLER_WEBMOTORS():
         # Extract combustível
         m = regex.search(rgx_combustivel, versao, regex.I)
         if m:
-            car['combustivel'] = self.remove_acento(m.groupdict().get('combustivel').strip())
+            car['combustivel'] = self._remove_acento(m.groupdict().get('combustivel').strip())
 
             if regex.search(r'recharge', car.get('combustivel'), regex.I):
                 car['combustivel'] = 'ELETRICO'    
@@ -326,7 +327,7 @@ class CRAWLER_WEBMOTORS():
         # Extract motor
         m = regex.search(rgx_motor, versao, regex.I)
         if m:
-            car['motor'] = self.remove_acento(m.groupdict().get('motor').strip())  
+            car['motor'] = self._remove_acento(m.groupdict().get('motor').strip())  
             
             if regex.search(r'flex.+|.+flex',car.get('motor'), regex.I) and not car.get('combustivel'): 
                 car['combustivel'] = 'FLEX'
@@ -403,6 +404,15 @@ class CRAWLER_WEBMOTORS():
 
         return new_dict
 
+    def _normalize_dict(self,car):
+        '''Strip, remove accent and set values to uppercase'''
+
+        for key in car:
+            if isinstance(car.get(key), dict):
+                self._normalize_dict(car.get(key))
+            elif type(car.get(key)) == str:
+                car[key] = self._remove_acento(car.get(key).strip().upper())
+
     def _parse_data(self, data):
         ''' Receives the json response. Returns dict containing relevant info of the cars'''
         
@@ -421,7 +431,7 @@ class CRAWLER_WEBMOTORS():
 
             car_info = self._set_key_pattern(car)
             
-            # strip dict
+            self._normalize_dict(car_info)
             
             self._look_for_leilao(car_info)
 
@@ -502,8 +512,7 @@ class CRAWLER_WEBMOTORS():
                 index = index + 1
 
             except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError,requests.exceptions.ReadTimeout) as e:
-                logging.error(f"Resposta inesperada. Replicando requisição {index}.")
-                index = index - 1
+                logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
                 continue
             except json.decoder.JSONDecodeError:
                 logging.error(f"Bloqueado pelo servidor. Replicando requisição {index} após sleep.time.")
