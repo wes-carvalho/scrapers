@@ -1,4 +1,4 @@
-import json
+import os
 import regex
 import hashlib
 
@@ -17,8 +17,11 @@ class DATABASE():
     n_cars = 0
 
     # db connection string
-    db_url = 'mysql+pymysql://wesley:Localdb@2602#@localhost:3306/scraper'
-    engine = create_engine(db_url, echo=False)
+    DB_PATH = os.environ['DATABASE_PATH'] #get env var
+    DB_URL = f'mysql+pymysql://{DB_PATH}'
+
+    # db engine
+    engine = create_engine(DB_URL, echo=False)
     
     # establishes new session
     Session = sessionmaker(bind = engine)
