@@ -514,7 +514,7 @@ class CRAWLER_WEBMOTORS():
             except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError,requests.exceptions.ReadTimeout) as e:
                 logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
                 continue
-            except json.decoder.JSONDecodeError:
+            except (json.decoder.JSONDecodeError, requests.exceptions.ConnectionError) as e:
                 logging.error(f"Bloqueado pelo servidor. Replicando requisição {index} após sleep.time.")
                 time.sleep(300)
                 index = index - 1
