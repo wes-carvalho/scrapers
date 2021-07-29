@@ -1,8 +1,8 @@
-from io import StringIO
 import os
 import json
 import time
 import regex
+import timeit
 import getpass
 import logging
 import requests
@@ -12,6 +12,7 @@ from datetime import datetime
 
 from analytics import ANALYTICS
 from database.save_db import DATABASE
+from config.proxy import PROXY
 
 
 curr_date = datetime.today().strftime("%d-%m-%Y-%Hh%M")
@@ -30,7 +31,7 @@ class CRAWLER_WEBMOTORS():
 
     URL_API_CALL = (
         '/api/search/car?url=https://www.webmotors.com.br/'
-        'carros%2Festoque%3F&actualPage={}&displayPerPage=28&'
+        'carros%2Festoque%3F&actualPage={}&displayPerPage=24&'
         'order=1&showMenu=true&showCount=true&showBreadCrumb=true&'
         'testAB=false&returnUrl=false'
     )
@@ -67,10 +68,14 @@ class CRAWLER_WEBMOTORS():
 
     nested_key_spec_remove = ['Make', 'Model', 'Version']
 
+    proxy_list = []
+
+    proxy_index = -1
     error_count = 0
     warning_count = 0
 
-    n_cars_requested = 3800
+    # defines the limit of cars requested before sleep time
+    n_cars_requested = 4500
 
     file_path = None
     send_email = None
@@ -78,9 +83,47 @@ class CRAWLER_WEBMOTORS():
     
     saving_path = None
     
+    proxy_list = []
+
     def __init__(self):
-        self.session = requests.Session()
-    
+        self.proxy_config()
+        self.session = requests.Session() 
+
+    def proxy_config(self):
+        timer = 10
+        time_limit = 300 # tempo máximo que o worker tentará obter um n_proxy > min_number_proxies
+        start = time.time()
+        min_number_proxies = 3
+
+        proxy_getter = PROXY()
+
+
+        date = datetime.today().strftime("%d-%m-%Y-%H:%M:%S")
+        logging.info(
+            f"\n{date}  Obtendo lista de proxies. Tempo máximo da operação: {time_limit} segundos."
+        )
+
+        # tentar obter uma lista de proxy superior ao mínimo estabelecido
+        while len(self.proxy_list) < min_number_proxies:        
+            self.proxy_list = proxy_getter.get_proxy_list()
+
+            if len(self.proxy_list) < min_number_proxies:
+                curr_time = time.time()
+
+                if curr_time - start > time_limit: # interrompe busca caso estoure o tempo limite
+                    break
+                
+                print(len(self.proxy_list))
+                logging.info(
+                    f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')}  Tentando novamente. Wait time: {timer} segundos.")
+                
+
+                print(curr_time - start)
+                time.sleep(timer)
+        
+        logging.info(f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')} Número de proxies obtidos: {len(self.proxy_list)}.")
+
+
     def _get_save_path(self):            
         user = getpass.getuser()
         root = f'{os.getcwd().split(user)[0]}{user}'
@@ -110,7 +153,6 @@ class CRAWLER_WEBMOTORS():
             )
             exit()
 
-
         logging.info(f"\n***INFORMAÇÕES SERÃO SALVAS EM {path}/Scraper***\n")
     
     @property
@@ -138,7 +180,7 @@ class CRAWLER_WEBMOTORS():
         '''Remove duplicates'''
         
         logging.info(
-            "\nRemovendo entradas duplicadas."
+            f'\n{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")} Removendo entradas duplicadas.'
         )
 
         # JSON keys to tuples
@@ -177,9 +219,7 @@ class CRAWLER_WEBMOTORS():
 
             final_data.append(item_converted)
         
-        logging.info(
-            "Limpeza de JSON concluída."
-        )
+        logging.info(f'{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")} Limpeza de JSON concluída.')
         
         return final_data
         
@@ -189,9 +229,7 @@ class CRAWLER_WEBMOTORS():
 
     def _save_json(self, data):
 
-        logging.info(
-            "\nSalvando JSON localmente."
-        )
+        logging.info(f'\n{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")} Salvando JSON localmente.')
 
         worker_name = self.__class__.__name__.split('_')[1]
         
@@ -206,24 +244,44 @@ class CRAWLER_WEBMOTORS():
             json_file.write(json.dumps(
                 data, indent=4, ensure_ascii=False))
 
-        logging.info(
-            "JSON salvo localmente.\n"
-        )
+        logging.info(f'{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")}JSON salvo localmente.\n')
 
-    def _request_page(self, URL_DATA):
+    def _change_proxy(self):
+        timer = 60
+        logging.info(f'{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")} Alterando Proxy.')
+
+        self.proxy_index = self.proxy_index + 1 if self.proxy_index < len(self.proxy_list) - 1 else -1
+        
+        if self.proxy_index == -1:
+            proxy = {}
+                        
+            logging.info(f'{datetime.today().strftime("%d-%m-%Y-%H:%M:%S")} Aguardando {timer} segundos')
+            time.sleep(timer)     
+        else:
+            proxy_port = self.proxy_list[self.proxy_index]
+
+            proxy = {
+                'https':f'http://{proxy_port[0]}:{proxy_port[1]}'
+            }
+
+        
+        return proxy
+    
+    def _request_page(self, URL_DATA, proxy = {}):
         return self.session.get(
             self.URL_BASE + URL_DATA,
             headers={'user-agent': self.user_agent},
+            proxies = proxy,
             timeout = 10
         )
 
     def _convert_response_json(self, response):
         return json.loads(response.text)
 
-    def _acess_data(self, index):
+    def _acess_data(self, index, proxy = {}):
         ''' Access server and returns response as json'''
         
-        response = self._request_page(self.URL_API_CALL.format(index))
+        response = self._request_page(self.URL_API_CALL.format(index), proxy)
         
         data = self._convert_response_json(response)
 
@@ -440,6 +498,8 @@ class CRAWLER_WEBMOTORS():
         return result
 
     def get_data_from_website(self, save_root=False, index=1):
+        
+        proxy = {}
 
         num_total_cars = 0
         num_cars_retrieved = 0
@@ -459,15 +519,8 @@ class CRAWLER_WEBMOTORS():
 
         if answer == 'N' or answer == 'n':
             self.flag_test = True
-            self.send_email = False
             num_total_cars = int(input('\nDigite o limite de carros: '))
-        else:
-            email_msg = input(
-            '\nDeseja enviar e-mail o report gerado por e-mail?'
-            '\nDigite "S" para Sim e "N" para Não\n'
-            )
-            self.send_email = True if email_msg in ['S','s'] else False
-
+        
         answer = input(
             '\nDeseja salvar as informações no Banco de Dados?'
             '\nDigite "S" para Sim e "N" para Não\n'
@@ -487,12 +540,11 @@ class CRAWLER_WEBMOTORS():
             try:
 
                 if num_cars_retrieved > self.n_cars_requested:
-                    print('Waiting...')
-                    time.sleep(300)
-                    self.n_cars_requested += 3800
-                    print('Ready!')
+                    proxy = self._change_proxy()
 
-                data = self._acess_data(index)
+                    self.n_cars_requested += 4500
+
+                data = self._acess_data(index, proxy)
 
                 data_crawled.extend(self._parse_data(data))
 
@@ -511,13 +563,25 @@ class CRAWLER_WEBMOTORS():
                 )
                 index = index + 1
 
-            except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError,requests.exceptions.ReadTimeout) as e:
+            except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError) as e:
                 logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
                 continue
+
+            except (requests.exceptions.ReadTimeout) as e:
+                logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
+
+                # exclui proxy da lista de proxies disponíveis
+                if len(proxy) > 0: 
+                    logging.error(f"Removendo proxy {index} da lista de proxies.")
+                    self.proxy_list.remove(proxy.get('https'))   
+
+                continue
+            
             except (json.decoder.JSONDecodeError, requests.exceptions.ConnectionError) as e:
-                logging.error(f"Bloqueado pelo servidor. Replicando requisição {index} após sleep.time.")
-                time.sleep(300)
-                index = index - 1
+                logging.error(f"Bloqueado pelo servidor. Replicando requisição {index} após mudança de proxy.")
+                proxy = self._change_proxy()
+                continue
+            
             except Exception:
                 logging.error("Erro não identificado na extração de dados")
                 raise Exception
@@ -534,17 +598,10 @@ if __name__ == "__main__":
     crawler = CRAWLER_WEBMOTORS()
     json_list, file_path = crawler.get_data_from_website(False)
     
-    wk = ANALYTICS()
-    resumo_path = wk.descriptive_statistics(json_list, file_path)
-
-    files = resumo_path
-
-    if crawler.send_email == True:
-       wk.send_email(files)
-
     if crawler.save_db == True:
 
-        logging.info(f"\nSalvando Informações no Banco\n")
+        logging.info(
+            f"\n{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')} Salvando Informações no Banco\n")
 
         database = DATABASE()
         n_cars = database.save(json_list, market_place)
