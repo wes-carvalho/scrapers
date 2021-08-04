@@ -113,12 +113,10 @@ class CRAWLER_WEBMOTORS():
                 if curr_time - start > time_limit: # interrompe busca caso estoure o tempo limite
                     break
                 
-                print(len(self.proxy_list))
                 logging.info(
                     f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')}  Tentando novamente. Wait time: {timer} segundos.")
                 
 
-                print(curr_time - start)
                 time.sleep(timer)
         
         logging.info(f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')} Número de proxies obtidos: {len(self.proxy_list)}.")
@@ -537,6 +535,7 @@ class CRAWLER_WEBMOTORS():
         )
 
         while num_cars_retrieved <= num_total_cars:
+            
             try:
 
                 if num_cars_retrieved > self.n_cars_requested:
@@ -568,13 +567,7 @@ class CRAWLER_WEBMOTORS():
                 continue
 
             except (requests.exceptions.ReadTimeout) as e:
-                logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
-
-                # exclui proxy da lista de proxies disponíveis
-                if len(proxy) > 0: 
-                    logging.error(f"Removendo proxy {index} da lista de proxies.")
-                    self.proxy_list.remove(proxy.get('https'))   
-
+                logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}") 
                 continue
             
             except (json.decoder.JSONDecodeError, requests.exceptions.ConnectionError) as e:
