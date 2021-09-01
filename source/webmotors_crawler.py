@@ -2,7 +2,6 @@ import os
 import json
 import time
 import regex
-import timeit
 import getpass
 import logging
 import requests
@@ -75,7 +74,8 @@ class CRAWLER_WEBMOTORS():
     warning_count = 0
 
     # defines the limit of cars requested before sleep time
-    n_cars_requested = 4500
+    n_cars_requested = 5000
+    car_increase = 5000
 
     file_path = None
     send_email = None
@@ -118,7 +118,15 @@ class CRAWLER_WEBMOTORS():
                 
 
                 time.sleep(timer)
+
+        logging.info(f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')}  Limpando proxies inativos.")
         
+        self.proxy_list = proxy_getter.get_working_proxies(
+            self.proxy_list,
+            self.URL_BASE + self.URL_API_CALL.format(1),
+            {'user-agent': self.user_agent}
+        )
+
         logging.info(f"{datetime.today().strftime('%d-%m-%Y-%H:%M:%S')} Número de proxies obtidos: {len(self.proxy_list)}.")
 
 
@@ -498,6 +506,8 @@ class CRAWLER_WEBMOTORS():
     def get_data_from_website(self, save_root=False, index=1):
         
         proxy = {}
+        
+        attribute_error = 0 # count number of attribute errors before change proxy
 
         num_total_cars = 0
         num_cars_retrieved = 0
@@ -541,7 +551,7 @@ class CRAWLER_WEBMOTORS():
                 if num_cars_retrieved > self.n_cars_requested:
                     proxy = self._change_proxy()
 
-                    self.n_cars_requested += 4500
+                    self.n_cars_requested += self.car_increase
 
                 data = self._acess_data(index, proxy)
 
@@ -564,6 +574,13 @@ class CRAWLER_WEBMOTORS():
 
             except (AttributeError, TypeError, requests.exceptions.ChunkedEncodingError) as e:
                 logging.error(f"Resposta inesperada. Replicando requisição {index}. Erro: {e}")
+                
+                attribute_error += 1
+
+                if attribute_error == 5: # avoid changing proxy everytime 
+                    proxy = self._change_proxy()
+                    attribute_error = 0
+
                 continue
 
             except (requests.exceptions.ReadTimeout) as e:
